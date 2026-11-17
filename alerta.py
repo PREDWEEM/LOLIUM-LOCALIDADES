@@ -21,13 +21,30 @@ def _clima(lat: float, lon: float, anio: int) -> pd.DataFrame:
 
 
 datos = L.cargar()
-locs = datos["localidades"]
-por_id = {x["id"]: x for x in locs}
-inicial = st.query_params.get("loc")
+locs = list(datos["localidades"])
+# punto elegido en el explorador de la web (?lat=…&lon=…&nombre=…): se agrega al selector con la calibración regional
+_q = st.query_params
+punto = None
+try:
+    if "lat" in _q and "lon" in _q:
+        _lat, _lon = float(_q["lat"]), float(_q["lon"])
+        if -55 <= _lat <= -21 and -74 <= _lon <= -53:
+            punto = {"id": "punto", "nombre": (_q.get("nombre") or "Punto elegido")[:60], "lat": round(_lat, 4),
+                     "lon": round(_lon, 4), "parametros": L.PARAMS_REGIONAL, "confianza": "regional", "campanias_locales": 0,
+                     "nota": "Punto elegido en el explorador de localidades de la web: alerta con la calibración regional, sin "
+                             "conteos locales. Clima ERA5-Land/ERA5 + ECMWF IFS (Open-Meteo)."}
+            locs.insert(0, punto)
+except (TypeError, ValueError):
+    punto = None
+inicial = "punto" if punto else _q.get("loc")
 idx = next((i for i, x in enumerate(locs) if x["id"] == inicial), 0)
 st.sidebar.markdown("## 📍 Localidad")
 loc = st.sidebar.selectbox("Localidad", locs, index=idx, format_func=lambda x: x["nombre"], label_visibility="collapsed")
-st.query_params["loc"] = loc["id"]
+if loc["id"] != "punto":
+    for _k in ("lat", "lon", "nombre"):
+        if _k in st.query_params:
+            del st.query_params[_k]
+    st.query_params["loc"] = loc["id"]
 
 pagina.encabezado(f"🌾 PREDWEEM LOLIUM — {loc['nombre'].upper()} · prueba", "PREDWEEM Lolium — localidades")
 st.caption(f"Web de prueba: alerta para localidades sin app propia · {L.CONFIANZA.get(loc.get('confianza'), '')} · "
