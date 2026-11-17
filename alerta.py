@@ -8,6 +8,10 @@ import pandas as pd
 import streamlit as st
 
 import clima_openmeteo as clima
+
+# Streamlit Cloud deja en memoria la versión vieja de los módulos al actualizar el repositorio: si falta algo, se recarga
+if not hasattr(clima, "guardado"):
+    clima = importlib.reload(clima)
 import localidades as L
 from acceso_predweem import mostrar_sesion
 from lolium_comun import pagina
