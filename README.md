@@ -6,6 +6,7 @@ app propia. No modifica las 8 apps calibradas ni la web LOLIUM-WEB.
 - **Alerta por localidad** (`alerta.py`): la misma alerta que las apps (paquete `lolium-comun`): qué hacer esta semana,
   tacómetro del inicio, grandes flujos, graminicida de barbecho, residual y flujos tardíos, con la **calibración
   regional** (`params/regional.json`) y el clima del punto.
+  También abre un punto cualquiera con `?lat=…&lon=…&nombre=…` (lo usa el explorador de localidades de la web).
 - **Nueva localidad** (`visor.py`): ubicar el punto en un mapa interactivo (se mueve arrastrando, zoom con la rueda y
   **doble clic** para elegir la localidad; `mapa.py` + `componentes/mapa_dblclick`, Leaflet 1.9.4 incluido) y ver la distancia al sitio calibrado más cercano, comparar su clima
   de febrero a abril de una campaña (por defecto la actual) con los 8 sitios (aviso de extrapolación), ver la alerta, validarla con conteos de una campaña (AUC
