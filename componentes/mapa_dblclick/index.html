@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="leaflet.css">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; font-family: "Source Sans Pro", sans-serif; }
+  #mapa { width: 100%; border-radius: 8px; border: 1px solid #d1d5db; cursor: crosshair; }
+  #ayuda { font-size: 13px; color: #4b5563; margin: 4px 2px 0 2px; }
+  .etiqueta { background: rgba(255,255,255,.9); border: none; box-shadow: none; font-size: 11px; padding: 0 3px; }
+  .etiqueta::before { display: none; }
+</style>
+</head>
+<body>
+<div id="mapa"></div>
+<div id="ayuda">Arrastrá para moverte · rueda o botones +/− para el zoom · <b>doble clic</b> sobre la localidad de interés para elegirla.</div>
+<script src="leaflet.js"></script>
+<script>
+// Componente bidireccional de Streamlit sin dependencias: protocolo de mensajes de streamlit-component-lib.
+const enviar = (tipo, datos) => window.parent.postMessage(Object.assign({isStreamlitMessage: true, type: tipo}, datos), "*");
+let mapa = null, capa = null, marcaSel = null, n = 0, altura = 420;
+
+function crearMapa(args) {
+  altura = args.altura || 420;
+  document.getElementById("mapa").style.height = altura + "px";
+  mapa = L.map("mapa", {doubleClickZoom: false, scrollWheelZoom: true, dragging: true})
+    .setView([args.centro[0], args.centro[1]], args.zoom || 6);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+              {maxZoom: 18, attribution: "© OpenStreetMap"}).addTo(mapa);
+  capa = L.layerGroup().addTo(mapa);
+  mapa.on("dblclick", e => {
+    n = Date.now();
+    const lat = Math.round(e.latlng.lat * 10000) / 10000, lon = Math.round(e.latlng.lng * 10000) / 10000;
+    ponerSeleccion(lat, lon);
+    enviar("streamlit:setComponentValue", {value: {lat: lat, lon: lon, n: n}, dataType: "json"});
+  });
+}
+
+function ponerSeleccion(lat, lon) {
+  if (marcaSel) mapa.removeLayer(marcaSel);
+  marcaSel = L.circleMarker([lat, lon], {radius: 9, color: "#991b1b", weight: 2, fillColor: "#dc2626", fillOpacity: .9})
+    .bindTooltip(`Punto elegido<br>${lat.toFixed(4)}, ${lon.toFixed(4)}`).addTo(mapa);
+}
+
+function dibujar(args) {
+  if (!mapa) crearMapa(args);
+  capa.clearLayers();
+  (args.puntos || []).forEach(p => {
+    L.circleMarker([p.lat, p.lon], {radius: 7, color: p.borde || "#374151", weight: 1.5, fillColor: p.color || "#6b7280", fillOpacity: .9})
+      .bindTooltip(p.nombre, {permanent: !!p.etiqueta, direction: "right", offset: [9, 0], className: p.etiqueta ? "etiqueta" : ""})
+      .addTo(capa);
+  });
+  if (args.seleccion) ponerSeleccion(args.seleccion[0], args.seleccion[1]);
+  enviar("streamlit:setFrameHeight", {height: altura + 46});
+}
+
+window.addEventListener("message", ev => {
+  const d = ev.data;
+  if (d && d.type === "streamlit:render") dibujar(d.args || {});
+});
+enviar("streamlit:componentReady", {apiVersion: 1});
+</script>
+</body>
+</html>
