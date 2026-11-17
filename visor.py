@@ -11,6 +11,7 @@ import streamlit as st
 
 import clima_openmeteo as clima
 import localidades as L
+from mapa import mapa_dblclick
 from acceso_predweem import mostrar_sesion
 
 BASE = Path(__file__).resolve().parent
@@ -50,16 +51,24 @@ sitios = datos["sitios_calibrados"]
 
 # ---------------------------------------------------------------------------------------------- 1. ubicar
 st.subheader("1. Ubicar la localidad")
+st.session_state.setdefault("v_lat", -37.98)
+st.session_state.setdefault("v_lon", -61.35)
+clic = mapa_dblclick(
+    puntos=[{"lat": s["lat"], "lon": s["lon"], "nombre": s["nombre"], "color": "#6b7280", "etiqueta": True} for s in sitios]
+    + [{"lat": x["lat"], "lon": x["lon"], "nombre": x["nombre"], "color": "#1d4ed8", "etiqueta": True} for x in datos["localidades"]],
+    centro=(-36.8, -60.5), zoom=6, seleccion=(st.session_state["v_lat"], st.session_state["v_lon"]), key="v_mapa")
+if clic and clic.get("n") != st.session_state.get("v_clic_n"):
+    # doble clic nuevo en el mapa: pasa a ser el punto elegido (antes de crear los campos de latitud y longitud)
+    st.session_state["v_clic_n"] = clic.get("n")
+    st.session_state["v_lat"] = min(max(float(clic["lat"]), -55.0), -21.0)
+    st.session_state["v_lon"] = min(max(float(clic["lon"]), -74.0), -53.0)
 c1, c2, c3 = st.columns([2, 1, 1])
-nombre = c1.text_input("Nombre", value=st.session_state.get("v_nombre", ""), placeholder="p. ej. Coronel Pringles")
-lat = c2.number_input("Latitud", value=-37.98, min_value=-55.0, max_value=-21.0, step=0.01, format="%.4f")
-lon = c3.number_input("Longitud", value=-61.35, min_value=-74.0, max_value=-53.0, step=0.01, format="%.4f")
+nombre = c1.text_input("Nombre", key="v_nombre", placeholder="p. ej. Coronel Pringles")
+lat = c2.number_input("Latitud", min_value=-55.0, max_value=-21.0, step=0.01, format="%.4f", key="v_lat")
+lon = c3.number_input("Longitud", min_value=-74.0, max_value=-53.0, step=0.01, format="%.4f", key="v_lon")
 cercano, dist = L.sitio_mas_cercano(lat, lon, sitios)
-pts = pd.DataFrame([{"lat": lat, "lon": lon, "color": "#dc2626", "tam": 6000}]
-                   + [{"lat": s["lat"], "lon": s["lon"], "color": "#6b7280", "tam": 3500} for s in sitios]
-                   + [{"lat": x["lat"], "lon": x["lon"], "color": "#1d4ed8", "tam": 3500} for x in datos["localidades"]])
-st.map(pts, color="color", size="tam", zoom=5)
-st.caption(f"Rojo: el punto nuevo · gris: las 8 apps calibradas · azul: localidades de prueba. Sitio calibrado más cercano: "
+st.caption(f"Rojo: el punto elegido (doble clic en el mapa, o latitud y longitud a mano) · gris: las 8 apps calibradas · "
+           f"azul: localidades de prueba. Sitio calibrado más cercano: "
            f"**{cercano['nombre']}**, a {dist:.0f} km.")
 if dist > 150:
     st.warning(f"El punto está a más de 150 km del sitio calibrado más cercano ({cercano['nombre']}): la alerta sería una "
