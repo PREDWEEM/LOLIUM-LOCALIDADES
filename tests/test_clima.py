@@ -6,6 +6,8 @@ import clima_openmeteo as C
 
 
 class _Resp:
+    status_code, headers = 200, {}
+
     def __init__(self, d):
         self.d = d
 
@@ -43,3 +45,40 @@ def test_campania_cerrada_solo_reanalisis(monkeypatch):
     monkeypatch.setattr(C.requests, "get", lambda url, params, timeout: _Resp(_serie("2025-01-01", 274)))
     df = C.campania(-37.3, -59.1, 2025, hoy=date(2026, 3, 1))
     assert set(df["TIPO"]) == {"Reanalisis"}
+
+
+def test_feb_abr_una_campania(monkeypatch):
+    pedidos = []
+
+    def falso(url, params, timeout):
+        pedidos.append(params)
+        return _Resp(_serie(params["start_date"], 94))
+
+    monkeypatch.setattr(C.requests, "get", falso)
+    r = C.clima_feb_abr(-33.9, -60.6, 2026, hoy=date(2026, 11, 17))
+    assert len(pedidos) == 1 and pedidos[0]["start_date"] == "2026-01-27" and pedidos[0]["end_date"] == "2026-04-30"
+    assert r["tmed_feb_abr"] == 14.0 and r["lluvia_feb_abr"] == 89.0 and r["dias_pulso_feb_abr"] == 0
+
+
+def test_reintenta_ante_429(monkeypatch):
+    estados = iter([429, 429, 200])
+
+    class R429(_Resp):
+        def __init__(self, d, code):
+            super().__init__(d)
+            self.status_code, self.headers = code, {"Retry-After": "1"}
+
+    monkeypatch.setattr(C.time, "sleep", lambda s: None)
+    monkeypatch.setattr(C.requests, "get", lambda url, params, timeout: R429(_serie("2026-01-01", 3), next(estados)))
+    assert len(C._pedir(C.URL_ARCHIVO, {})) == 3
+
+
+def test_429_persistente_da_mensaje_claro(monkeypatch):
+    class R(_Resp):
+        status_code, headers = 429, {}
+
+    monkeypatch.setattr(C.time, "sleep", lambda s: None)
+    monkeypatch.setattr(C.requests, "get", lambda url, params, timeout: R({}))
+    import pytest
+    with pytest.raises(RuntimeError, match="Open-Meteo pidió esperar"):
+        C._pedir(C.URL_ARCHIVO, {})
