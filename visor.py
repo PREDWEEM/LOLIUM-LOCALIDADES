@@ -33,9 +33,9 @@ if _acc.get("activo"):
         st.stop()
 
 
-@st.cache_data(ttl=30 * 24 * 3600, show_spinner=False)
-def _climatologia(lat: float, lon: float) -> dict:
-    return clima.climatologia(lat, lon)
+@st.cache_data(ttl=24 * 3600, show_spinner=False)
+def _clima_feb_abr(lat: float, lon: float, anio: int) -> dict:
+    return clima.clima_feb_abr(lat, lon, anio)
 
 
 @st.cache_data(ttl=3 * 3600, show_spinner=False)
@@ -76,31 +76,38 @@ if dist > 150:
 
 # ---------------------------------------------------------------------------------------------- 2. clima
 st.subheader("2. Clima comparado con los sitios calibrados")
-st.caption("ERA5-Land (Open-Meteo), febrero a abril de 2011–2025: el período del inicio y de los grandes flujos.")
+hoy = date.today()
+anio = st.selectbox("Campaña", [hoy.year, hoy.year - 1, hoy.year - 2], key="v_anio",
+                    help="Se usa para comparar el clima (paso 2) y para la vista previa de la alerta (paso 3).")
+st.caption(f"ERA5-Land (Open-Meteo), febrero a abril de {anio}: el período del inicio y de los grandes flujos. Una sola campaña "
+           "describe ese año, no el clima típico del lugar.")
 if st.button("Revisar el clima", key="v_clima"):
-    with st.spinner("Bajando 15 años de clima para el punto y los 8 sitios…"):
+    with st.spinner(f"Bajando febrero a abril de {anio} para el punto y los 8 sitios…"):
         try:
-            ref = {s["nombre"]: _climatologia(s["lat"], s["lon"]) for s in sitios}
-            st.session_state["v_clim"] = {"punto": (lat, lon), "nuevo": _climatologia(lat, lon), "ref": ref}
+            nuevo = _clima_feb_abr(lat, lon, int(anio))
+            ref = {}
+            for s_ in sitios:
+                ref[s_["nombre"]] = _clima_feb_abr(s_["lat"], s_["lon"], int(anio))
+            st.session_state["v_clim"] = {"punto": (lat, lon, int(anio)), "nuevo": nuevo, "ref": ref}
         except Exception as e:  # noqa: BLE001
             st.error(f"No se pudo bajar el clima: {e}")
 cl = st.session_state.get("v_clim")
-if cl and cl["punto"] == (lat, lon) and cl["nuevo"]:
+if cl and cl["punto"] == (lat, lon, int(anio)) and cl["nuevo"]:
     filas = [{"Lugar": f"➡️ {nombre or 'Punto nuevo'}", **cl["nuevo"]}] + [{"Lugar": k, **v} for k, v in cl["ref"].items() if v]
     t = pd.DataFrame(filas)[["Lugar", "tmed_feb_abr", "lluvia_feb_abr", "dias_pulso_feb_abr"]]
-    t.columns = ["Lugar", "Temperatura media feb–abr (°C)", "Lluvia feb–abr (mm)", "Días con ≥ 20 mm en 5 días"]
+    t.columns = ["Lugar", f"Temperatura media feb–abr {anio} (°C)", f"Lluvia feb–abr {anio} (mm)", "Días con ≥ 20 mm en 5 días"]
     st.dataframe(t.round(1), hide_index=True, width="stretch")
     fuera = [col for col, k in (("temperatura", "tmed_feb_abr"), ("lluvia", "lluvia_feb_abr"), ("pulsos de lluvia", "dias_pulso_feb_abr"))
              if L.fuera_de_rango(cl["nuevo"][k], [v[k] for v in cl["ref"].values() if v])]
     if fuera:
-        st.warning("Fuera del rango de los sitios calibrados en: " + ", ".join(fuera) + ". La alerta sería una extrapolación.")
+        st.warning(f"En {anio}, fuera del rango de los sitios calibrados en: " + ", ".join(fuera) + ". Si se repite en otras "
+                   "campañas, la alerta sería una extrapolación.")
     else:
-        st.success("El clima de febrero a abril está dentro del rango de los sitios calibrados.")
+        st.success(f"En {anio}, el clima de febrero a abril quedó dentro del rango de los sitios calibrados.")
 
 # ---------------------------------------------------------------------------------------------- 3. vista previa
 st.subheader("3. Vista previa de la alerta")
-hoy = date.today()
-anio = st.selectbox("Campaña", [hoy.year, hoy.year - 1, hoy.year - 2], key="v_anio")
+st.caption(f"Campaña {anio} (la elegida en el paso 2).")
 os.environ["LOLIUM_ALERTA_PARAMS"] = str(BASE / L.PARAMS_REGIONAL)
 from lolium_comun import alerta_lolmu as _al  # noqa: E402
 from lolium_comun import visualizacion_alerta_lolmu as _vis  # noqa: E402

@@ -8,7 +8,7 @@ app propia. No modifica las 8 apps calibradas ni la web LOLIUM-WEB.
   regional** (`params/regional.json`) y el clima del punto.
 - **Nueva localidad** (`visor.py`): ubicar el punto en un mapa interactivo (se mueve arrastrando, zoom con la rueda y
   **doble clic** para elegir la localidad; `mapa.py` + `componentes/mapa_dblclick`, Leaflet 1.9.4 incluido) y ver la distancia al sitio calibrado más cercano, comparar su clima
-  de febrero a abril con los 8 sitios (aviso de extrapolación), ver la alerta, validarla con conteos de una campaña (AUC
+  de febrero a abril de una campaña (por defecto la actual) con los 8 sitios (aviso de extrapolación), ver la alerta, validarla con conteos de una campaña (AUC
   y flujos detectados, como en el paper) y proponer la localidad con un PR sobre `localidades.json`.
 
 ## Clima
@@ -16,7 +16,7 @@ app propia. No modifica las 8 apps calibradas ni la web LOLIUM-WEB.
 Open-Meteo, sin workflow por localidad (se baja al abrir la app y se guarda 3 horas), con la misma estrategia que la app
 de Azul: **ERA5-Land** (reanálisis, ~9 km) para los días consolidados, **ECMWF IFS** para los días recientes que el
 reanálisis todavía no cubre y para el pronóstico de 7 días (`clima_openmeteo.py`). La lluvia faltante no se completa
-con cero.
+con cero. Si Open-Meteo responde «429» (demasiadas consultas por minuto), se reintenta con espera creciente.
 
 ## Agregar una localidad
 

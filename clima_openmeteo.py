@@ -12,6 +12,8 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import time
+
 import pandas as pd
 import requests
 
@@ -21,10 +23,18 @@ URL_PRONOSTICO = "https://api.open-meteo.com/v1/forecast"
 DIARIAS = "temperature_2m_max,temperature_2m_min,precipitation_sum"
 DIAS_PRONOSTICO = 8  # hoy + 7 días
 TIMEOUT = 60
+REINTENTOS = 3  # ante «429 Too Many Requests» (límite por minuto de la API gratuita), con espera creciente
 
 
 def _pedir(url: str, params: dict) -> pd.DataFrame:
-    r = requests.get(url, params=params, timeout=TIMEOUT)
+    for intento in range(REINTENTOS + 1):
+        r = requests.get(url, params=params, timeout=TIMEOUT)
+        if r.status_code != 429 or intento == REINTENTOS:
+            break
+        espera = r.headers.get("Retry-After") if hasattr(r, "headers") else None
+        time.sleep(min(float(espera), 60) if espera and str(espera).replace(".", "", 1).isdigit() else 5 * 2 ** intento)
+    if r.status_code == 429:
+        raise RuntimeError("Open-Meteo pidió esperar (demasiadas consultas en poco tiempo). Probá de nuevo en un minuto.")
     r.raise_for_status()
     d = r.json().get("daily") or {}
     if not d.get("time"):
@@ -67,6 +77,22 @@ def campania(lat: float, lon: float, anio: int | None = None, hoy: date | None =
     pro = pro.assign(TIPO=["Pronostico" if f.date() >= hoy else "Reciente" for f in pro["Fecha"]])
     out = pd.concat([rea, pro], ignore_index=True)
     return out[["Fecha", "TMAX", "TMIN", "Prec", "FUENTE", "TIPO"]].sort_values("Fecha").reset_index(drop=True)
+
+
+def clima_feb_abr(lat: float, lon: float, anio: int, hoy: date | None = None) -> dict:
+    """Clima de febrero a abril de una campaña (ERA5-Land; si todavía no está consolidado, lo que haya): temperatura media
+    (°C), lluvia total (mm) y días con ≥ 20 mm en 5 días. Es una consulta liviana (unos 90 días)."""
+    hoy = hoy or datetime.now(ZoneInfo(ZONA)).date()
+    ini, fin = date(anio, 1, 27), min(date(anio, 4, 30), hoy - timedelta(days=1))  # 4 días antes del 1/02 para la suma de 5 días
+    if fin < date(anio, 2, 1):
+        return {}
+    df = reanalisis(lat, lon, ini, fin)
+    if df.empty:
+        return {}
+    pulsos = (df["Prec"].rolling(5).sum() >= 20)[df["Fecha"] >= pd.Timestamp(anio, 2, 1)]
+    df = df[df["Fecha"] >= pd.Timestamp(anio, 2, 1)]
+    return {"tmed_feb_abr": float(((df["TMAX"] + df["TMIN"]) / 2).mean()), "lluvia_feb_abr": float(df["Prec"].sum()),
+            "dias_pulso_feb_abr": float(pulsos.sum()), "hasta": df["Fecha"].max().strftime("%d/%m")}
 
 
 def climatologia(lat: float, lon: float, desde: int = 2011, hasta: int = 2025) -> dict:
