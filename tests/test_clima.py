@@ -82,3 +82,33 @@ def test_429_persistente_da_mensaje_claro(monkeypatch):
     import pytest
     with pytest.raises(RuntimeError, match="Open-Meteo pidió esperar"):
         C._pedir(C.URL_ARCHIVO, {})
+
+
+def test_respaldo_era5_si_era5_land_viene_vacio(monkeypatch):
+    def falso(url, params, timeout):
+        n = (pd.Timestamp(params["end_date"]) - pd.Timestamp(params["start_date"])).days + 1
+        if params["models"] == "era5_land":
+            return _Resp(_serie(params["start_date"], n, nulos_final=n))  # todo vacío, diario y horario
+        return _Resp(_serie(params["start_date"], n))
+
+    monkeypatch.setattr(C.requests, "get", falso)
+    df = C.campania(-33.9, -60.6, 2026, hoy=date(2026, 11, 17))
+    assert len(df) == 274 and set(df["FUENTE"]) == {"ERA5"} and df["TMAX"].notna().all()
+
+
+def test_agrega_horario_si_diario_vacio(monkeypatch):
+    class RH(_Resp):
+        def json(self):
+            return {"hourly": self.d}
+
+    def falso(url, params, timeout):
+        if "daily" in params:
+            return _Resp(_serie(params["start_date"], 3, nulos_final=3))
+        horas = pd.date_range(params["start_date"], periods=72, freq="h")
+        return RH({"time": horas.strftime("%Y-%m-%dT%H:%M").tolist(), "temperature_2m": [10 + h.hour / 2 for h in horas],
+                   "precipitation": [0.5] * 72})
+
+    monkeypatch.setattr(C.requests, "get", falso)
+    df = C.reanalisis(-33.9, -60.6, date(2026, 1, 1), date(2026, 1, 3))
+    assert len(df) == 3 and df["TMAX"].iloc[0] == 21.5 and df["TMIN"].iloc[0] == 10 and df["Prec"].iloc[0] == 12.0
+    assert df["FUENTE"].iloc[0] == "ERA5_LAND"

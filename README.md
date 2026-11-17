@@ -14,7 +14,8 @@ app propia. No modifica las 8 apps calibradas ni la web LOLIUM-WEB.
 ## Clima
 
 Open-Meteo, sin workflow por localidad (se baja al abrir la app y se guarda 3 horas), con la misma estrategia que la app
-de Azul: **ERA5-Land** (reanálisis, ~9 km) para los días consolidados, **ECMWF IFS** para los días recientes que el
+de Azul: **ERA5-Land** (reanálisis, ~9 km; si Open-Meteo no lo entrega completo, **ERA5**, y si los datos diarios
+vienen vacíos, se arman desde los horarios) para los días consolidados, **ECMWF IFS** para los días recientes que el
 reanálisis todavía no cubre y para el pronóstico de 7 días (`clima_openmeteo.py`). La lluvia faltante no se completa
 con cero. Si Open-Meteo responde «429» (demasiadas consultas por minuto), se reintenta con espera creciente.
 

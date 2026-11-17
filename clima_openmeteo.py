@@ -26,7 +26,7 @@ TIMEOUT = 60
 REINTENTOS = 3  # ante «429 Too Many Requests» (límite por minuto de la API gratuita), con espera creciente
 
 
-def _pedir(url: str, params: dict) -> pd.DataFrame:
+def _get(url: str, params: dict) -> dict:
     for intento in range(REINTENTOS + 1):
         r = requests.get(url, params=params, timeout=TIMEOUT)
         if r.status_code != 429 or intento == REINTENTOS:
@@ -36,26 +36,74 @@ def _pedir(url: str, params: dict) -> pd.DataFrame:
     if r.status_code == 429:
         raise RuntimeError("Open-Meteo pidió esperar (demasiadas consultas en poco tiempo). Probá de nuevo en un minuto.")
     r.raise_for_status()
-    d = r.json().get("daily") or {}
+    return r.json()
+
+
+def _pedir(url: str, params: dict) -> pd.DataFrame:
+    """Serie diaria (``daily``); devuelve las columnas Fecha, TMAX, TMIN, Prec (con huecos si la API no tiene el dato)."""
+    d = _get(url, params).get("daily") or {}
     if not d.get("time"):
         return pd.DataFrame(columns=["Fecha", "TMAX", "TMIN", "Prec"])
-    return pd.DataFrame({"Fecha": pd.to_datetime(d["time"]), "TMAX": d.get("temperature_2m_max"),
-                         "TMIN": d.get("temperature_2m_min"), "Prec": d.get("precipitation_sum")})
+    return pd.DataFrame({"Fecha": pd.to_datetime(d["time"]), "TMAX": pd.to_numeric(pd.Series(d.get("temperature_2m_max")), errors="coerce"),
+                         "TMIN": pd.to_numeric(pd.Series(d.get("temperature_2m_min")), errors="coerce"),
+                         "Prec": pd.to_numeric(pd.Series(d.get("precipitation_sum")), errors="coerce")})
 
 
-def reanalisis(lat: float, lon: float, inicio: date, fin: date, modelo: str = "era5_land") -> pd.DataFrame:
-    """Serie diaria de reanálisis (por defecto ERA5-Land) entre ``inicio`` y ``fin``, sin los días incompletos del final."""
-    df = _pedir(URL_ARCHIVO, dict(latitude=lat, longitude=lon, start_date=inicio.isoformat(), end_date=fin.isoformat(),
-                                  daily=DIARIAS, timezone=ZONA, models=modelo))
-    completo = df.dropna(subset=["TMAX", "TMIN", "Prec"])
-    if completo.empty:
-        return completo.assign(FUENTE=[], TIPO=[])
-    return df[df["Fecha"] <= completo["Fecha"].max()].assign(FUENTE=modelo.upper(), TIPO="Reanalisis")
+def _pedir_horario(url: str, params: dict) -> pd.DataFrame:
+    """Serie horaria agregada a diaria (hora local): máxima, mínima y suma; un día cuenta solo con sus 24 horas."""
+    h = _get(url, params).get("hourly") or {}
+    if not h.get("time"):
+        return pd.DataFrame(columns=["Fecha", "TMAX", "TMIN", "Prec"])
+    df = pd.DataFrame({"Hora": pd.to_datetime(h["time"]), "T": pd.to_numeric(pd.Series(h.get("temperature_2m")), errors="coerce"),
+                       "P": pd.to_numeric(pd.Series(h.get("precipitation")), errors="coerce")})
+    df["Fecha"] = df["Hora"].dt.normalize()
+    g = df.groupby("Fecha")
+    out = pd.DataFrame({"TMAX": g["T"].max(), "TMIN": g["T"].min(), "Prec": g["P"].sum(min_count=1),
+                        "n": g["T"].count().combine(g["P"].count(), min)}).reset_index()
+    out.loc[out["n"] < 24, ["TMAX", "TMIN", "Prec"]] = float("nan")
+    return out.drop(columns="n")
+
+
+def _completos(df: pd.DataFrame) -> pd.DataFrame:
+    return df.dropna(subset=["TMAX", "TMIN", "Prec"])
+
+
+def reanalisis(lat: float, lon: float, inicio: date, fin: date, modelos: tuple[str, ...] = ("era5_land", "era5")) -> pd.DataFrame:
+    """Serie diaria de reanálisis entre ``inicio`` y ``fin``, sin los días incompletos del final.
+
+    Igual que la app de Azul: prueba ERA5-Land y, si Open-Meteo no lo entrega completo (pasa seguido con los datos
+    diarios), ERA5; para cada uno, si los datos diarios vienen vacíos, los arma desde los horarios. Se queda con la
+    primera fuente que cubre el período salvo los últimos días (demora del reanálisis), o con la más completa."""
+    n = (fin - inicio).days + 1
+    base = dict(latitude=lat, longitude=lon, start_date=inicio.isoformat(), end_date=fin.isoformat(), timezone=ZONA,
+                cell_selection="land")
+    mejor, n_mejor = None, -1
+    for modelo in modelos:
+        for horario in (False, True):
+            try:
+                df = (_pedir_horario(URL_ARCHIVO, {**base, "models": modelo, "hourly": "temperature_2m,precipitation"}) if horario
+                      else _pedir(URL_ARCHIVO, {**base, "models": modelo, "daily": DIARIAS}))
+            except RuntimeError:
+                raise
+            except Exception:  # noqa: BLE001  (modelo no disponible para ese punto o período: probar el siguiente)
+                continue
+            c = _completos(df)
+            if len(c) > n_mejor:
+                mejor, n_mejor = (df, modelo), len(c)
+            if len(c) >= max(1, n - 12):  # cubre todo salvo la demora del reanálisis
+                break
+        if n_mejor >= max(1, n - 12):
+            break
+    if mejor is None or n_mejor <= 0:
+        return pd.DataFrame(columns=["Fecha", "TMAX", "TMIN", "Prec", "FUENTE", "TIPO"])
+    df, modelo = mejor
+    ult = _completos(df)["Fecha"].max()
+    return df[df["Fecha"] <= ult].assign(FUENTE=modelo.upper(), TIPO="Reanalisis").reset_index(drop=True)
 
 
 def ecmwf(lat: float, lon: float, dias_atras: int) -> pd.DataFrame:
     """ECMWF IFS: los últimos ``dias_atras`` días más hoy y 7 días de pronóstico."""
-    df = _pedir(URL_PRONOSTICO, dict(latitude=lat, longitude=lon, daily=DIARIAS, timezone=ZONA, models="ecmwf_ifs025",
+    df = _pedir(URL_PRONOSTICO, dict(latitude=lat, longitude=lon, daily=DIARIAS, timezone=ZONA, models="ecmwf_ifs025", cell_selection="land",
                                      past_days=max(0, min(int(dias_atras), 92)), forecast_days=DIAS_PRONOSTICO))
     return df.assign(FUENTE="ECMWF_IFS")
 
