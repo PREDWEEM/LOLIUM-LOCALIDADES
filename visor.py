@@ -92,6 +92,8 @@ if st.button("Revisar el clima", key="v_clima"):
         except Exception as e:  # noqa: BLE001
             st.error(f"No se pudo bajar el clima: {e}")
 cl = st.session_state.get("v_clim")
+if cl and cl["punto"] == (lat, lon, int(anio)) and not cl["nuevo"]:
+    st.warning(f"Open-Meteo no devolvió datos de febrero a abril de {anio} para este punto. Probá de nuevo en unos minutos.")
 if cl and cl["punto"] == (lat, lon, int(anio)) and cl["nuevo"]:
     filas = [{"Lugar": f"➡️ {nombre or 'Punto nuevo'}", **cl["nuevo"]}] + [{"Lugar": k, **v} for k, v in cl["ref"].items() if v]
     t = pd.DataFrame(filas)[["Lugar", "tmed_feb_abr", "lluvia_feb_abr", "dias_pulso_feb_abr"]]
@@ -117,9 +119,13 @@ importlib.reload(_vis)
 if st.toggle("Mostrar la alerta con la calibración regional", key="v_prev"):
     try:
         met = _campania(lat, lon, int(anio))
-        _vis.mostrar_alerta_lolmu(met, tope_hasta_ultimo_cero=True, curva_desde_ultimo_cero=True, curva_desde_primeras=True,
-                                  localidad=nombre or "Punto nuevo",
-                                  nota_sitio="**Vista previa del visor:** calibración regional, sin conteos locales.")
+        if met.empty:
+            st.warning(f"Open-Meteo no devolvió datos de clima para este punto en {anio} (ni ERA5-Land ni ERA5). Probá de nuevo "
+                       "en unos minutos o con otra campaña.")
+        else:
+            _vis.mostrar_alerta_lolmu(met, tope_hasta_ultimo_cero=True, curva_desde_ultimo_cero=True, curva_desde_primeras=True,
+                                      localidad=nombre or "Punto nuevo",
+                                      nota_sitio="**Vista previa del visor:** calibración regional, sin conteos locales.")
     except Exception as e:  # noqa: BLE001
         st.error(f"No se pudo calcular la vista previa: {e}")
 

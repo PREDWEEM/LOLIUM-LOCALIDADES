@@ -47,6 +47,9 @@ except Exception as e:  # noqa: BLE001
     st.error(f"No se pudo bajar el clima de Open-Meteo: {e}")
 
 resultados = None
+if meteo is not None and meteo.empty:
+    st.warning(f"Open-Meteo no devolvió datos de clima para {loc['nombre']} en {anio} (ni ERA5-Land ni ERA5). Probá de nuevo "
+               "en unos minutos.")
 if meteo is not None and not meteo.empty:
     os.environ["LOLIUM_ALERTA_PARAMS"] = str(BASE / loc.get("parametros", L.PARAMS_REGIONAL))
     try:
