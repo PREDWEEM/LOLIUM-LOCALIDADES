@@ -156,3 +156,30 @@ def climatologia(lat: float, lon: float, desde: int = 2011, hasta: int = 2025) -
     pulsos = df.groupby("anio")["Prec"].apply(lambda s: int((s.rolling(5).sum() >= 20).sum()))
     return {"tmed_feb_abr": float(tmed.mean()), "lluvia_feb_abr": float(lluvia.mean()),
             "dias_pulso_feb_abr": float(pulsos.mean()), "anios": int(len(tmed))}
+
+
+def guardado(ruta, anio: int, hoy: datetime | None = None, horas_max: float = 30) -> tuple[pd.DataFrame | None, str | None]:
+    """Clima guardado por el workflow (``clima/<id>.csv``) si es de la campaña ``anio`` y está al día: emitido hace menos
+    de ``horas_max`` horas, o la campaña ya cerró (después del 1/10) y la serie llega hasta su fin. Devuelve (serie,
+    fecha de emisión) o (None, None) si hay que bajarlo en vivo."""
+    from pathlib import Path
+    ruta = Path(ruta)
+    if not ruta.is_file():
+        return None, None
+    try:
+        df = pd.read_csv(ruta)
+        df["Fecha"] = pd.to_datetime(df["Fecha"])
+        emision = pd.to_datetime(df["FECHA_EMISION"].astype(str)).max()
+    except Exception:  # noqa: BLE001
+        return None, None
+    if df.empty or int(df["Fecha"].dt.year.iloc[0]) != anio:
+        return None, None
+    hoy = pd.Timestamp(hoy or datetime.now(ZoneInfo(ZONA)))
+    if emision.tzinfo is None:
+        emision = emision.tz_localize(ZONA)
+    if hoy.tzinfo is None:
+        hoy = hoy.tz_localize(ZONA)
+    cerrada = hoy.date() > date(anio, 10, 1) and df["Fecha"].max().date() >= date(anio, 9, 25)
+    if not cerrada and (hoy - emision).total_seconds() / 3600 > horas_max:
+        return None, None
+    return df.drop(columns=["FECHA_EMISION"]), emision.strftime("%d/%m %H:%M")
