@@ -1,0 +1,77 @@
+{
+  "_descripcion": "Localidades de la web de prueba PREDWEEM Lolium. Cada una usa los parámetros indicados en 'parametros' (por defecto la calibración regional). Se agregan con el visor «Nueva localidad», que abre un PR sobre este archivo.",
+  "sitios_calibrados": [
+    {
+      "nombre": "Bordenave",
+      "lat": -37.7617,
+      "lon": -63.0837
+    },
+    {
+      "nombre": "Lartigau",
+      "lat": -38.6166,
+      "lon": -61.7
+    },
+    {
+      "nombre": "Tres Arroyos",
+      "lat": -38.45,
+      "lon": -60.2763
+    },
+    {
+      "nombre": "Azul",
+      "lat": -36.87,
+      "lon": -59.89
+    },
+    {
+      "nombre": "Olavarría",
+      "lat": -36.8799,
+      "lon": -60.216
+    },
+    {
+      "nombre": "Balcarce",
+      "lat": -37.7664,
+      "lon": -58.2999
+    },
+    {
+      "nombre": "Pergamino",
+      "lat": -33.9443,
+      "lon": -60.5745
+    },
+    {
+      "nombre": "San Pedro",
+      "lat": -33.7328,
+      "lon": -59.7965
+    }
+  ],
+  "localidades": [
+    {
+      "id": "tandil",
+      "nombre": "Tandil",
+      "lat": -37.3217,
+      "lon": -59.1332,
+      "parametros": "params/regional.json",
+      "confianza": "regional",
+      "campanias_locales": 0,
+      "nota": "Localidad de prueba: alerta con la calibración regional, sin conteos locales. Clima ERA5-Land + ECMWF IFS (Open-Meteo)."
+    },
+    {
+      "id": "coronel-suarez",
+      "nombre": "Coronel Suárez",
+      "lat": -37.4547,
+      "lon": -61.9334,
+      "parametros": "params/regional.json",
+      "confianza": "regional",
+      "campanias_locales": 0,
+      "nota": "Localidad de prueba: alerta con la calibración regional, sin conteos locales. Clima ERA5-Land + ECMWF IFS (Open-Meteo)."
+    },
+    {
+      "id": "necochea",
+      "nombre": "Necochea",
+      "lat": -38.5545,
+      "lon": -58.7396,
+      "parametros": "params/regional.json",
+      "confianza": "regional",
+      "campanias_locales": 0,
+      "nota": "Localidad de prueba: alerta con la calibración regional, sin conteos locales. Clima ERA5-Land + ECMWF IFS (Open-Meteo)."
+    }
+  ]
+}
