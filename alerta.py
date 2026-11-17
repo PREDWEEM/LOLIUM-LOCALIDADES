@@ -15,6 +15,11 @@ from lolium_comun import pagina
 BASE = Path(__file__).resolve().parent
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _clima_guardado(ruta: str, modificado: float, anio: int):  # noqa: ARG001  (``modificado`` invalida el caché)
+    return clima.guardado(ruta, anio)
+
+
 @st.cache_data(ttl=3 * 3600, show_spinner="Bajando el clima de Open-Meteo…")
 def _clima(lat: float, lon: float, anio: int) -> pd.DataFrame:
     return clima.campania(lat, lon, anio)
@@ -57,8 +62,15 @@ with st.sidebar.expander("Mapa de localidades"):
     st.caption("Rojo: localidad elegida · azul: otras localidades de prueba · gris: las 8 apps calibradas.")
 
 anio = pd.Timestamp.now(tz="America/Argentina/Buenos_Aires").year
+# primero el clima guardado por el workflow (dos veces por día); si falta o está viejo, se baja en vivo
+_arch = BASE / "clima" / f"{loc['id']}.csv"
+meteo, _emitido = _clima_guardado(str(_arch), _arch.stat().st_mtime if _arch.is_file() else 0, anio)
 try:
-    meteo = _clima(loc["lat"], loc["lon"], anio)
+    if meteo is None:
+        meteo = _clima(loc["lat"], loc["lon"], anio)
+        st.caption("Clima bajado en vivo de Open-Meteo.")
+    else:
+        st.caption(f"Clima actualizado el {_emitido} (se actualiza dos veces por día).")
 except Exception as e:  # noqa: BLE001
     meteo = None
     st.error(f"No se pudo bajar el clima de Open-Meteo: {e}")

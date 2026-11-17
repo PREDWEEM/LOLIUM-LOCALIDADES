@@ -14,7 +14,14 @@ app propia. No modifica las 8 apps calibradas ni la web LOLIUM-WEB.
 
 ## Clima
 
-Open-Meteo, sin workflow por localidad (se baja al abrir la app y se guarda 3 horas), con la misma estrategia que la app
+**Clima guardado.** El workflow `actualizar_clima.yml` corre todos los días a las 07:40 y 15:40 (hora argentina), y
+también a mano desde *Actions → Actualizar el clima de las localidades → Run workflow*. Baja la campaña de cada
+localidad de `localidades.json` y la guarda en `clima/<id>.csv`. Además, va sumando los días de pronóstico de cada
+emisión en `clima/pronosticos/<id>_<año>.csv`, para validar al cierre con lo que la alerta mostró. La app lee primero ese
+archivo si tiene menos de 30 h, o si la campaña ya cerró. Si no, o para un punto elegido en el mapa, baja el clima en
+vivo. Así la página abre rápido y no choca con el límite de consultas de Open-Meteo.
+
+Open-Meteo (en vivo: se baja al abrir la app y se guarda 3 horas), con la misma estrategia que la app
 de Azul: **ERA5-Land** (reanálisis, ~9 km; si Open-Meteo no lo entrega completo, **ERA5**, y si los datos diarios
 vienen vacíos, se arman desde los horarios) para los días consolidados, **ECMWF IFS** para los días recientes que el
 reanálisis todavía no cubre y para el pronóstico de 7 días (`clima_openmeteo.py`). La lluvia faltante no se completa
