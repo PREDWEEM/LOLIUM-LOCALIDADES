@@ -48,7 +48,7 @@ ingreso (`[auth]`, `[acceso]`) son los mismos que en las apps.
 
 ## Curva acumulada
 
-Con fecha de primeras plántulas (o un conteo con plantas), la curva de emergencia acumulada sigue el tiempo térmico desde esa fecha con la forma Weibull de LOLIUM-COMUN 1.11.0 (50 % a 357 °Cd; banda 10–90 %). Para sitios sin campañas propias es mejor que el calendario de Bordenave anclado que se usaba antes: en 38 campañas, error del acumulado 13,5 → 12,8 puntos (sitios de las apps 14,0 → 11,0; UBA 17,9 → 11,3; Red DIMA 15,2 → 17,3).
+Con fecha de primeras plántulas (o un conteo con plantas), la curva de emergencia acumulada sigue el tiempo térmico desde esa fecha con la forma Weibull de LOLIUM-COMUN 1.13.0 (al ver las primeras plántulas ya nació el 15 %; 50 % a 294 °Cd; banda 10–90 %). Para sitios sin campañas propias es mejor que el calendario de Bordenave anclado que se usaba antes: en 38 campañas, error del acumulado 13,5 → 12,8 puntos (sitios de las apps 14,0 → 11,0; UBA 17,9 → 11,3; Red DIMA 15,2 → 17,3).
 
 ## Límites
 
