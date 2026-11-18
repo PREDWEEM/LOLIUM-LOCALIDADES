@@ -89,7 +89,7 @@ if meteo is not None and not meteo.empty:
         importlib.reload(_vis)
         resultados = _vis.mostrar_alerta_lolmu(
             meteo, **parametros,
-            tope_hasta_ultimo_cero=True, curva_desde_ultimo_cero=True, curva_desde_primeras=True,
+            tope_hasta_ultimo_cero=True, curva_desde_ultimo_cero=True, curva_tiempo_termico=True,
             localidad=loc["nombre"], nota_sitio=L.nota_markdown(loc))
     except Exception as e:  # noqa: BLE001
         st.warning(f"No se pudo calcular la alerta: {e}")

@@ -123,7 +123,7 @@ if st.toggle("Mostrar la alerta con la calibración regional", key="v_prev"):
             st.warning(f"Open-Meteo no devolvió datos de clima para este punto en {anio} (ni ERA5-Land ni ERA5). Probá de nuevo "
                        "en unos minutos o con otra campaña.")
         else:
-            _vis.mostrar_alerta_lolmu(met, tope_hasta_ultimo_cero=True, curva_desde_ultimo_cero=True, curva_desde_primeras=True,
+            _vis.mostrar_alerta_lolmu(met, tope_hasta_ultimo_cero=True, curva_desde_ultimo_cero=True, curva_tiempo_termico=True,
                                       localidad=nombre or "Punto nuevo",
                                       nota_sitio="**Vista previa del visor:** calibración regional, sin conteos locales.")
     except Exception as e:  # noqa: BLE001

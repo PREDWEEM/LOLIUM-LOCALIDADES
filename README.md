@@ -46,6 +46,10 @@ Con el control de ingreso activo, el visor es solo para administradores (`[acces
 Streamlit Community Cloud → New app → este repositorio, rama `main`, archivo principal `app.py`. Los secretos de
 ingreso (`[auth]`, `[acceso]`) son los mismos que en las apps.
 
+## Curva acumulada
+
+Con fecha de primeras plántulas (o un conteo con plantas), la curva de emergencia acumulada sigue el tiempo térmico desde esa fecha con la forma Weibull de LOLIUM-COMUN 1.11.0 (50 % a 357 °Cd; banda 10–90 %). Para sitios sin campañas propias es mejor que el calendario de Bordenave anclado que se usaba antes: en 38 campañas, error del acumulado 13,5 → 12,8 puntos (sitios de las apps 14,0 → 11,0; UBA 17,9 → 11,3; Red DIMA 15,2 → 17,3).
+
 ## Límites
 
 Sin conteos locales, una localidad hereda la calibración regional (AUC 0,89–0,93 en los sitios de validación de la
