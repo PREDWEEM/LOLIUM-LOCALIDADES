@@ -67,11 +67,18 @@ def test_ene_abr_campania_en_curso_y_antes_de_empezar(monkeypatch):
     assert r["hasta"] == "11/01" and r["lluvia"] == 11.0
 
 
-def test_climatologia_promedia_enero_a_abril(monkeypatch):
-    monkeypatch.setattr(C.requests, "get", lambda url, params, timeout: _Resp(
-        _serie(params["start_date"], (date(2013, 4, 30) - date(2010, 12, 28)).days + 1)))
-    r = C.climatologia(-33.9, -60.6, 2011, 2013)
-    assert r["anios"] == 3 and r["tmed"] == 14.0 and 118 <= r["lluvia"] <= 121 and r["dias_pulso"] == 0
+def test_climatologia_pide_cada_campania_por_separado(monkeypatch):
+    pedidos = []
+
+    def falso(url, params, timeout):
+        pedidos.append((params["start_date"], params["end_date"]))
+        n = (date.fromisoformat(params["end_date"]) - date.fromisoformat(params["start_date"])).days + 1
+        return _Resp(_serie(params["start_date"], n))
+
+    monkeypatch.setattr(C.requests, "get", falso)
+    r = C.climatologia(-33.9, -60.6, 2011, 2013, pausa_s=0)
+    assert pedidos == [("2010-12-28", "2011-04-30"), ("2011-12-28", "2012-04-30"), ("2012-12-28", "2013-04-30")]
+    assert r["anios"] == 3 and r["tmed"] == 14.0 and 120 <= r["lluvia"] <= 121 and r["dias_pulso"] == 0
 
 
 def test_reintenta_ante_429(monkeypatch):
