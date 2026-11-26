@@ -15,6 +15,7 @@ from mapa import mapa_dblclick
 from acceso_predweem import mostrar_sesion
 
 BASE = Path(__file__).resolve().parent
+CLIMA_DESDE, CLIMA_HASTA = 2011, 2025  # campañas del clima típico
 
 # solo administradores cuando el control de ingreso está activo
 def _secreto(nombre: str) -> dict:
@@ -34,8 +35,14 @@ if _acc.get("activo"):
 
 
 @st.cache_data(ttl=24 * 3600, show_spinner=False)
-def _clima_feb_abr(lat: float, lon: float, anio: int) -> dict:
-    return clima.clima_feb_abr(lat, lon, anio)
+def _clima_ene_abr(lat: float, lon: float, anio: int) -> dict:
+    return clima.clima_ene_abr(lat, lon, anio)
+
+
+@st.cache_data(ttl=30 * 24 * 3600, show_spinner=False, persist="disk")
+def _climatologia(lat: float, lon: float) -> dict:
+    # 15 campañas de reanálisis por punto: tarda la primera vez y después queda guardado (no cambia)
+    return clima.climatologia(lat, lon, CLIMA_DESDE, CLIMA_HASTA)
 
 
 @st.cache_data(ttl=3 * 3600, show_spinner=False)
@@ -79,33 +86,51 @@ st.subheader("2. Clima comparado con los sitios calibrados")
 hoy = date.today()
 anio = st.selectbox("Campaña", [hoy.year, hoy.year - 1, hoy.year - 2], key="v_anio",
                     help="Se usa para comparar el clima (paso 2) y para la vista previa de la alerta (paso 3).")
-st.caption(f"ERA5-Land (Open-Meteo), febrero a abril de {anio}: el período del inicio y de los grandes flujos. Una sola campaña "
-           "describe ese año, no el clima típico del lugar.")
+st.caption(f"ERA5-Land (Open-Meteo), enero a abril: el período del inicio de la emergencia y de los grandes flujos. Se compara el "
+           f"clima típico ({CLIMA_DESDE}–{CLIMA_HASTA}), que describe el lugar, y el de {anio}, que describe ese año.")
 if st.button("Revisar el clima", key="v_clima"):
-    with st.spinner(f"Bajando febrero a abril de {anio} para el punto y los 8 sitios…"):
+    with st.spinner(f"Bajando enero a abril de {anio} y el clima típico {CLIMA_DESDE}–{CLIMA_HASTA} para el punto y los 8 sitios "
+                    "(la primera vez puede tardar un minuto)…"):
         try:
-            nuevo = _clima_feb_abr(lat, lon, int(anio))
-            ref = {}
-            for s_ in sitios:
-                ref[s_["nombre"]] = _clima_feb_abr(s_["lat"], s_["lon"], int(anio))
-            st.session_state["v_clim"] = {"punto": (lat, lon, int(anio)), "nuevo": nuevo, "ref": ref}
+            todos = [(f"➡️ {nombre or 'Punto nuevo'}", lat, lon)] + [(s_["nombre"], s_["lat"], s_["lon"]) for s_ in sitios]
+            st.session_state["v_clim"] = {
+                "punto": (lat, lon, int(anio)),
+                "filas": [(n, _climatologia(la, lo), _clima_ene_abr(la, lo, int(anio))) for n, la, lo in todos]}
         except Exception as e:  # noqa: BLE001
             st.error(f"No se pudo bajar el clima: {e}")
 cl = st.session_state.get("v_clim")
-if cl and cl["punto"] == (lat, lon, int(anio)) and not cl["nuevo"]:
-    st.warning(f"Open-Meteo no devolvió datos de febrero a abril de {anio} para este punto. Probá de nuevo en unos minutos.")
-if cl and cl["punto"] == (lat, lon, int(anio)) and cl["nuevo"]:
-    filas = [{"Lugar": f"➡️ {nombre or 'Punto nuevo'}", **cl["nuevo"]}] + [{"Lugar": k, **v} for k, v in cl["ref"].items() if v]
-    t = pd.DataFrame(filas)[["Lugar", "tmed_feb_abr", "lluvia_feb_abr", "dias_pulso_feb_abr"]]
-    t.columns = ["Lugar", f"Temperatura media feb–abr {anio} (°C)", f"Lluvia feb–abr {anio} (mm)", "Días con ≥ 20 mm en 5 días"]
-    st.dataframe(t.round(1), hide_index=True, width="stretch")
-    fuera = [col for col, k in (("temperatura", "tmed_feb_abr"), ("lluvia", "lluvia_feb_abr"), ("pulsos de lluvia", "dias_pulso_feb_abr"))
-             if L.fuera_de_rango(cl["nuevo"][k], [v[k] for v in cl["ref"].values() if v])]
-    if fuera:
-        st.warning(f"En {anio}, fuera del rango de los sitios calibrados en: " + ", ".join(fuera) + ". Si se repite en otras "
-                   "campañas, la alerta sería una extrapolación.")
+if cl and cl["punto"] == (lat, lon, int(anio)):
+    nuevo_tip, nuevo_anio = cl["filas"][0][1], cl["filas"][0][2]
+    ref_tip = [t for _, t, _ in cl["filas"][1:] if t]
+    ref_anio = [a for _, _, a in cl["filas"][1:] if a]
+    VARS = (("tmed", "temp. media (°C)", "temperatura"), ("lluvia", "lluvia (mm)", "lluvia"),
+            ("dias_pulso", "días de pulso", "pulsos de lluvia"))
+    tabla = pd.DataFrame([{"Lugar": n,
+                           **{f"Típico: {et}": t.get(k) for k, et, _ in VARS},
+                           **{f"{anio}: {et}": a.get(k) for k, et, _ in VARS}} for n, t, a in cl["filas"]])
+    st.dataframe(tabla.round(1), hide_index=True, width="stretch")
+    st.caption(f"Enero a abril. Típico: promedio de las campañas {CLIMA_DESDE}–{CLIMA_HASTA}. Días de pulso: días en que la lluvia "
+               "de los 5 días previos suma 20 mm o más.")
+    hasta = nuevo_anio.get("hasta") if nuevo_anio else None
+    if hasta and hasta != "30/04":
+        st.caption(f"{anio}: datos hasta el {hasta} (campaña en curso).")
+    if not nuevo_tip:
+        st.warning("Open-Meteo no devolvió el clima típico de este punto. Probá de nuevo en unos minutos.")
     else:
-        st.success(f"En {anio}, el clima de febrero a abril quedó dentro del rango de los sitios calibrados.")
+        fuera = [nom for k, _, nom in VARS if L.fuera_de_rango(nuevo_tip[k], [r[k] for r in ref_tip])]
+        if fuera:
+            st.warning(f"Clima típico de enero a abril fuera del rango de los sitios calibrados en: {', '.join(fuera)}. "
+                       "La alerta en este lugar sería una extrapolación de la calibración.")
+        else:
+            st.success("El clima típico de enero a abril está dentro del rango de los sitios calibrados.")
+    if not nuevo_anio:
+        st.info(f"Todavía no hay datos de enero a abril de {anio} para este punto.")
+    else:
+        fuera = [nom for k, _, nom in VARS if L.fuera_de_rango(nuevo_anio[k], [r[k] for r in ref_anio])]
+        if fuera:
+            st.caption(f"En {anio}, fuera del rango de los sitios calibrados ese mismo año en: {', '.join(fuera)}.")
+        else:
+            st.caption(f"En {anio}, dentro del rango de los sitios calibrados ese mismo año.")
 
 # ---------------------------------------------------------------------------------------------- 3. vista previa
 st.subheader("3. Vista previa de la alerta")

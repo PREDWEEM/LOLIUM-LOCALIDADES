@@ -47,17 +47,31 @@ def test_campania_cerrada_solo_reanalisis(monkeypatch):
     assert set(df["TIPO"]) == {"Reanalisis"}
 
 
-def test_feb_abr_una_campania(monkeypatch):
+def test_ene_abr_una_campania(monkeypatch):
     pedidos = []
 
     def falso(url, params, timeout):
         pedidos.append(params)
-        return _Resp(_serie(params["start_date"], 94))
+        return _Resp(_serie(params["start_date"], 124))
 
     monkeypatch.setattr(C.requests, "get", falso)
-    r = C.clima_feb_abr(-33.9, -60.6, 2026, hoy=date(2026, 11, 17))
-    assert len(pedidos) == 1 and pedidos[0]["start_date"] == "2026-01-27" and pedidos[0]["end_date"] == "2026-04-30"
-    assert r["tmed_feb_abr"] == 14.0 and r["lluvia_feb_abr"] == 89.0 and r["dias_pulso_feb_abr"] == 0
+    r = C.clima_ene_abr(-33.9, -60.6, 2026, hoy=date(2026, 11, 17))
+    assert len(pedidos) == 1 and pedidos[0]["start_date"] == "2025-12-28" and pedidos[0]["end_date"] == "2026-04-30"
+    assert r["tmed"] == 14.0 and r["lluvia"] == 120.0 and r["dias_pulso"] == 0 and r["hasta"] == "30/04"
+
+
+def test_ene_abr_campania_en_curso_y_antes_de_empezar(monkeypatch):
+    monkeypatch.setattr(C.requests, "get", lambda url, params, timeout: _Resp(_serie(params["start_date"], 15)))
+    assert C.clima_ene_abr(-33.9, -60.6, 2027, hoy=date(2027, 1, 1)) == {}  # todavía sin días de la campaña
+    r = C.clima_ene_abr(-33.9, -60.6, 2027, hoy=date(2027, 1, 12))
+    assert r["hasta"] == "11/01" and r["lluvia"] == 11.0
+
+
+def test_climatologia_promedia_enero_a_abril(monkeypatch):
+    monkeypatch.setattr(C.requests, "get", lambda url, params, timeout: _Resp(
+        _serie(params["start_date"], (date(2013, 4, 30) - date(2010, 12, 28)).days + 1)))
+    r = C.climatologia(-33.9, -60.6, 2011, 2013)
+    assert r["anios"] == 3 and r["tmed"] == 14.0 and 118 <= r["lluvia"] <= 121 and r["dias_pulso"] == 0
 
 
 def test_reintenta_ante_429(monkeypatch):

@@ -9,7 +9,7 @@ app propia. No modifica las 8 apps calibradas ni la web LOLIUM-WEB.
   También abre un punto cualquiera con `?lat=…&lon=…&nombre=…` (lo usa el explorador de localidades de la web).
 - **Nueva localidad** (`visor.py`): ubicar el punto en un mapa interactivo (se mueve arrastrando, zoom con la rueda y
   **doble clic** para elegir la localidad; `mapa.py` + `componentes/mapa_dblclick`, Leaflet 1.9.4 incluido) y ver la distancia al sitio calibrado más cercano, comparar su clima
-  de febrero a abril de una campaña (por defecto la actual) con los 8 sitios (aviso de extrapolación), ver la alerta, validarla con conteos de una campaña (AUC
+  de enero a abril, típico 2011–2025 y de una campaña (por defecto la actual), con los 8 sitios (aviso de extrapolación), ver la alerta, validarla con conteos de una campaña (AUC
   y flujos detectados, como en el paper) y proponer la localidad con un PR sobre `localidades.json`.
 
 ## Clima
