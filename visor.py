@@ -39,10 +39,19 @@ def _clima_ene_abr(lat: float, lon: float, anio: int) -> dict:
     return clima.clima_ene_abr(lat, lon, anio)
 
 
-@st.cache_data(ttl=30 * 24 * 3600, show_spinner=False, persist="disk")
+@st.cache_data(ttl=30 * 24 * 3600, show_spinner=False)
 def _climatologia(lat: float, lon: float) -> dict:
-    # 15 campañas de reanálisis por punto: tarda la primera vez y después queda guardado (no cambia)
+    # 15 pedidos chicos (enero a abril de cada campaña): tarda la primera vez y después queda en caché
     return clima.climatologia(lat, lon, CLIMA_DESDE, CLIMA_HASTA)
+
+
+def _tipico_sitios() -> dict:
+    """Clima típico de los sitios calibrados guardado por el workflow ``clima_tipico.yml`` (vacío si todavía no corrió)."""
+    try:
+        d = json.loads((BASE / "clima" / "tipico_sitios.json").read_text(encoding="utf-8"))
+        return d["sitios"] if (d.get("desde"), d.get("hasta")) == (CLIMA_DESDE, CLIMA_HASTA) else {}
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 @st.cache_data(ttl=3 * 3600, show_spinner=False)
@@ -90,12 +99,14 @@ st.caption(f"ERA5-Land (Open-Meteo), enero a abril: el período del inicio de la
            f"clima típico ({CLIMA_DESDE}–{CLIMA_HASTA}), que describe el lugar, y el de {anio}, que describe ese año.")
 if st.button("Revisar el clima", key="v_clima"):
     with st.spinner(f"Bajando enero a abril de {anio} y el clima típico {CLIMA_DESDE}–{CLIMA_HASTA} para el punto y los 8 sitios "
-                    "(la primera vez puede tardar un minuto)…"):
+                    "(la primera vez que se revisa un punto tarda unos segundos más)…"):
         try:
+            guardado = _tipico_sitios()
             todos = [(f"➡️ {nombre or 'Punto nuevo'}", lat, lon)] + [(s_["nombre"], s_["lat"], s_["lon"]) for s_ in sitios]
             st.session_state["v_clim"] = {
                 "punto": (lat, lon, int(anio)),
-                "filas": [(n, _climatologia(la, lo), _clima_ene_abr(la, lo, int(anio))) for n, la, lo in todos]}
+                "filas": [(n, (guardado.get(n) if i and guardado.get(n) else _climatologia(la, lo)), _clima_ene_abr(la, lo, int(anio)))
+                          for i, (n, la, lo) in enumerate(todos)]}
         except Exception as e:  # noqa: BLE001
             st.error(f"No se pudo bajar el clima: {e}")
 cl = st.session_state.get("v_clim")

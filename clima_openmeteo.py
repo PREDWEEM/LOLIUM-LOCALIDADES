@@ -149,20 +149,25 @@ def clima_ene_abr(lat: float, lon: float, anio: int, hoy: date | None = None) ->
     return {**_resumen(df, pulsos), "hasta": df["Fecha"].max().strftime("%d/%m")}
 
 
-def climatologia(lat: float, lon: float, desde: int = 2011, hasta: int = 2025) -> dict:
+def climatologia(lat: float, lon: float, desde: int = 2011, hasta: int = 2025, pausa_s: float = 0.3) -> dict:
     """Clima típico de enero a abril (período del inicio y los grandes flujos) en ERA5-Land: temperatura media (°C),
-    lluvia total (mm) y días con ≥ 20 mm en 5 días, promedio de las campañas ``desde``–``hasta``."""
-    df = reanalisis(lat, lon, date(desde - 1, 12, 28), date(hasta, 4, 30))
-    if df.empty:
-        return {}
-    df = df.assign(pulso=df["Prec"].rolling(5).sum() >= 20)  # sobre la serie continua: el 1/01 suma los últimos días de diciembre
-    df = df[df["Fecha"].dt.month.isin([1, 2, 3, 4]) & (df["Fecha"].dt.year >= desde)].copy()
-    if df.empty:
-        return {}
-    anios = [_resumen(d, d["pulso"]) for _, d in df.groupby(df["Fecha"].dt.year) if len(d) >= 110]
+    lluvia total (mm) y días con ≥ 20 mm en 5 días, promedio de las campañas ``desde``–``hasta`` completas.
+
+    Pide cada campaña por separado (28/12 al 30/04, unos 125 días): Open-Meteo cuenta un pedido largo como muchas
+    consultas, y 15 años de una vez gastan cientos; así son unas 135 por punto."""
+    anios = []
+    for anio in range(desde, hasta + 1):
+        df = reanalisis(lat, lon, date(anio - 1, 12, 28), date(anio, 4, 30))
+        if not df.empty:
+            pulsos = (df["Prec"].rolling(5).sum() >= 20)[df["Fecha"] >= pd.Timestamp(anio, 1, 1)]
+            d = df[df["Fecha"] >= pd.Timestamp(anio, 1, 1)]
+            if len(d) >= 110:  # campaña completa (enero a abril)
+                anios.append(_resumen(d, pulsos))
+        if pausa_s:
+            time.sleep(pausa_s)
     if not anios:
         return {}
-    return {k: float(sum(a[k] for a in anios) / len(anios)) for k in ("tmed", "lluvia", "dias_pulso")} | {"anios": len(anios)}
+    return {k: round(float(sum(a[k] for a in anios) / len(anios)), 2) for k in ("tmed", "lluvia", "dias_pulso")} | {"anios": len(anios)}
 
 
 def guardado(ruta, anio: int, hoy: datetime | None = None, horas_max: float = 30) -> tuple[pd.DataFrame | None, str | None]:
