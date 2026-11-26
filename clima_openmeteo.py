@@ -127,35 +127,42 @@ def campania(lat: float, lon: float, anio: int | None = None, hoy: date | None =
     return out[["Fecha", "TMAX", "TMIN", "Prec", "FUENTE", "TIPO"]].sort_values("Fecha").reset_index(drop=True)
 
 
-def clima_feb_abr(lat: float, lon: float, anio: int, hoy: date | None = None) -> dict:
-    """Clima de febrero a abril de una campaña (ERA5-Land; si todavía no está consolidado, lo que haya): temperatura media
-    (°C), lluvia total (mm) y días con ≥ 20 mm en 5 días. Es una consulta liviana (unos 90 días)."""
+def _resumen(df: pd.DataFrame, pulsos: pd.Series) -> dict:
+    return {"tmed": float(((df["TMAX"] + df["TMIN"]) / 2).mean()), "lluvia": float(df["Prec"].sum()), "dias_pulso": float(pulsos.sum())}
+
+
+def clima_ene_abr(lat: float, lon: float, anio: int, hoy: date | None = None) -> dict:
+    """Clima de enero a abril de una campaña (ERA5-Land; si todavía no está consolidado, lo que haya): temperatura media
+    (°C), lluvia total (mm) y días con ≥ 20 mm en 5 días. Enero a abril es el período del inicio de la emergencia y de los
+    grandes flujos (la alerta se emite desde el 1/01). Es una consulta liviana (unos 125 días)."""
     hoy = hoy or datetime.now(ZoneInfo(ZONA)).date()
-    ini, fin = date(anio, 1, 27), min(date(anio, 4, 30), hoy - timedelta(days=1))  # 4 días antes del 1/02 para la suma de 5 días
-    if fin < date(anio, 2, 1):
+    ini, fin = date(anio - 1, 12, 28), min(date(anio, 4, 30), hoy - timedelta(days=1))  # 4 días antes del 1/01 para la suma de 5 días
+    if fin < date(anio, 1, 1):
         return {}
     df = reanalisis(lat, lon, ini, fin)
     if df.empty:
         return {}
-    pulsos = (df["Prec"].rolling(5).sum() >= 20)[df["Fecha"] >= pd.Timestamp(anio, 2, 1)]
-    df = df[df["Fecha"] >= pd.Timestamp(anio, 2, 1)]
-    return {"tmed_feb_abr": float(((df["TMAX"] + df["TMIN"]) / 2).mean()), "lluvia_feb_abr": float(df["Prec"].sum()),
-            "dias_pulso_feb_abr": float(pulsos.sum()), "hasta": df["Fecha"].max().strftime("%d/%m")}
+    pulsos = (df["Prec"].rolling(5).sum() >= 20)[df["Fecha"] >= pd.Timestamp(anio, 1, 1)]
+    df = df[df["Fecha"] >= pd.Timestamp(anio, 1, 1)]
+    if df.empty:
+        return {}
+    return {**_resumen(df, pulsos), "hasta": df["Fecha"].max().strftime("%d/%m")}
 
 
 def climatologia(lat: float, lon: float, desde: int = 2011, hasta: int = 2025) -> dict:
-    """Clima medio de febrero a abril (período del inicio y los grandes flujos) en ERA5-Land: temperatura media (°C),
-    lluvia total (mm) y días con ≥ 20 mm en 5 días, promedio por año."""
-    df = reanalisis(lat, lon, date(desde, 1, 1), date(hasta, 12, 31))
-    df = df[df["Fecha"].dt.month.isin([2, 3, 4])].copy()
+    """Clima típico de enero a abril (período del inicio y los grandes flujos) en ERA5-Land: temperatura media (°C),
+    lluvia total (mm) y días con ≥ 20 mm en 5 días, promedio de las campañas ``desde``–``hasta``."""
+    df = reanalisis(lat, lon, date(desde - 1, 12, 28), date(hasta, 4, 30))
     if df.empty:
         return {}
-    df["anio"] = df["Fecha"].dt.year
-    tmed = ((df["TMAX"] + df["TMIN"]) / 2).groupby(df["anio"]).mean()
-    lluvia = df.groupby("anio")["Prec"].sum()
-    pulsos = df.groupby("anio")["Prec"].apply(lambda s: int((s.rolling(5).sum() >= 20).sum()))
-    return {"tmed_feb_abr": float(tmed.mean()), "lluvia_feb_abr": float(lluvia.mean()),
-            "dias_pulso_feb_abr": float(pulsos.mean()), "anios": int(len(tmed))}
+    df = df.assign(pulso=df["Prec"].rolling(5).sum() >= 20)  # sobre la serie continua: el 1/01 suma los últimos días de diciembre
+    df = df[df["Fecha"].dt.month.isin([1, 2, 3, 4]) & (df["Fecha"].dt.year >= desde)].copy()
+    if df.empty:
+        return {}
+    anios = [_resumen(d, d["pulso"]) for _, d in df.groupby(df["Fecha"].dt.year) if len(d) >= 110]
+    if not anios:
+        return {}
+    return {k: float(sum(a[k] for a in anios) / len(anios)) for k in ("tmed", "lluvia", "dias_pulso")} | {"anios": len(anios)}
 
 
 def guardado(ruta, anio: int, hoy: datetime | None = None, horas_max: float = 30) -> tuple[pd.DataFrame | None, str | None]:
